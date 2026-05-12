@@ -1,0 +1,23 @@
+{
+  "name": "bulk-attribute-editor",
+  "type": "widget",
+  "version": "1.0.0",
+  "exbVersion": "1.13.0",
+  "author": "Geomatique",
+  "description": "Select features (points, lines, polygons) and bulk-edit their attributes, respecting field domains.",
+  "copyright": "",
+  "license": "",
+  "properties": {
+    "supportMultipleInstances": true,
+    "hasLocale": true
+  },
+  "label": "Bulk attribute editor",
+  "i18nLabelKey": "_widgetLabel",
+  "defaultSize": {
+    "width": 420,
+    "height": 600
+  },
+  "dependency": [
+    "jimu-arcgis"
+  ]
+}
