@@ -291,6 +291,18 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
       )
     }
 
+    // Cas spécial : treatment_num avec liste déroulante 1-10
+    if (fc.fieldName === 'treatment_num') {
+      return (
+        <Select size="sm" value={val} onChange={e => set((e.target as any).value)}>
+          <Option value="">-- Choose --</Option>
+          {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
+            <Option key={num} value={String(num)}>{num}</Option>
+          ))}
+        </Select>
+      )
+    }
+
     const numeric = ['small-integer','integer','big-integer','single','double','long'].includes(field.type)
     if (numeric) {
       return (
@@ -313,6 +325,18 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
     if (!totalSelected) { setMessage({ type: 'error', text: t('noFeatures') }); return }
     const active = fieldConfigs.filter(fc => { const v = values[fc.id]; return v !== '' && v != null })
     if (!active.length) { setMessage({ type: 'error', text: 'Enter at least one value.' }); return }
+    
+    // Validation : treatment_num doit être >= 1
+    for (const fc of active) {
+      if (fc.fieldName === 'treatment_num') {
+        const v = Number(values[fc.id])
+        if (v < 1) {
+          setMessage({ type: 'error', text: 'treatment_num must be >= 1.' })
+          return
+        }
+      }
+    }
+    
     if (!window.confirm(t('confirmApply', { count: totalSelected }))) return
 
     setBusy(true); setMessage(null)
