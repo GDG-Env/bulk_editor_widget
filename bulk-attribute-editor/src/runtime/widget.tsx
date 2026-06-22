@@ -279,6 +279,18 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
 
     if (!field) return <TextInput size="sm" value={val} placeholder="field not available" disabled onChange={e => set(e.target.value)} />
 
+    // Cas spécial : treatment_num avec liste déroulante 1-10
+    if (fc.fieldName === 'treatment_num') {
+      return (
+        <Select size="sm" value={val} onChange={e => set((e.target as any).value)}>
+          <Option value="">-- Choose --</Option>
+          {Array.from({ length: 10 }, (_, i) => (i + 1).toString()).map(num => (
+            <Option key={num} value={num}>{num}</Option>
+          ))}
+        </Select>
+      )
+    }
+
     const dom = field.domain as any
     if (dom?.type === 'coded-value') {
       return (
