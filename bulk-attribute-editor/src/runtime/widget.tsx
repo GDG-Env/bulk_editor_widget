@@ -31,8 +31,12 @@ const S: Record<string, React.CSSProperties> = {
   muted:   { fontSize: 12, color: '#888', marginTop: 4 },
   mb:      { marginBottom: 10 },
   mb4:     { marginBottom: 4 },
-  card:    { border: '1px solid #ddd', borderRadius: 4, padding: 8, marginBottom: 6 },
-  warn:    { fontSize: 11, color: '#f90', marginLeft: 4 }
+  card:        { border: '1px solid #ddd', borderRadius: 4, padding: 8, marginBottom: 6 },
+  warn:        { fontSize: 11, color: '#f90', marginLeft: 4 },
+  layerGroup:  { border: '1px solid #ccc', borderRadius: 4, marginBottom: 8, overflow: 'hidden' },
+  layerHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#f0f0f0', cursor: 'pointer', userSelect: 'none' as any, fontWeight: 600, fontSize: 13 },
+  layerBody:   { padding: '8px 8px 2px 8px' },
+  chevron:     { fontSize: 10, transition: 'transform 0.2s', display: 'inline-block' }
 }
 
 // â”€â”€ Widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -51,6 +55,7 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
   const [modulesReady, setModulesReady] = useState(false)
   const [scanStatus, setScanStatus]     = useState<'idle' | 'scanning' | 'done'>('idle')
   const [message, setMessage]           = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [collapsedLayers, setCollapsedLayers] = useState<Set<string>>(new Set())
 
   const jmvRef          = useRef<JimuMapView>(null)
   const layerMapRef     = useRef<Map<string, LayerInfo>>(new Map())
@@ -432,22 +437,35 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
       <div style={S.mb}>
         <span style={S.label}>{t('fieldsToEdit')}</span>
         {uniqueDsIds.map(dsId => {
-          const info   = layerMap.get(dsId)
-          const title  = info?.title || dsId
-          const fields = fieldConfigs.filter(fc => fc.useDataSource?.dataSourceId === dsId)
+          const info      = layerMap.get(dsId)
+          const title     = info?.title || dsId
+          const fields    = fieldConfigs.filter(fc => fc.useDataSource?.dataSourceId === dsId)
+          const collapsed = collapsedLayers.has(dsId)
+          const toggle    = () => setCollapsedLayers(prev => {
+            const next = new Set(prev)
+            collapsed ? next.delete(dsId) : next.add(dsId)
+            return next
+          })
           return (
-            <div key={dsId} style={{ marginBottom: 10 }}>
-              <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 4 }}>
-                {title}
-                {!info && scanStatus === 'done'     && <span style={S.warn}>&#x26A0; layer not found in map</span>}
-                {!info && scanStatus === 'scanning' && <span style={S.warn}>... loading</span>}
+            <div key={dsId} style={S.layerGroup}>
+              <div style={S.layerHeader} onClick={toggle}>
+                <span>
+                  {title}
+                  {!info && scanStatus === 'done'     && <span style={S.warn}>&#x26A0; layer not found</span>}
+                  {!info && scanStatus === 'scanning' && <span style={S.warn}>... loading</span>}
+                </span>
+                <span style={{ ...S.chevron, transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>&#9660;</span>
               </div>
-              {fields.map(fc => (
-                <div key={fc.id} style={S.card}>
-                  <div style={{ ...S.mb4, fontSize: 12, fontWeight: 500 }}>{fc.label || fc.fieldName}</div>
-                  {renderInput(fc)}
+              {!collapsed && (
+                <div style={S.layerBody}>
+                  {fields.map(fc => (
+                    <div key={fc.id} style={S.card}>
+                      <div style={{ ...S.mb4, fontSize: 12, fontWeight: 500 }}>{fc.label || fc.fieldName}</div>
+                      {renderInput(fc)}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )
         })}
