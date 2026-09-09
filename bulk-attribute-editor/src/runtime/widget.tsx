@@ -51,6 +51,7 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
   const [drawing, setDrawing]           = useState(false)
   const [selected, setSelected]         = useState<SelectedSet>({})
   const [values, setValues]             = useState<ValueMap>({})
+  const [editedFieldIds, setEditedFieldIds] = useState<Set<string>>(new Set())
   const [busy, setBusy]                 = useState(false)
   const [modulesReady, setModulesReady] = useState(false)
   const [scanStatus, setScanStatus]     = useState<'idle' | 'scanning' | 'done'>('idle')
@@ -153,18 +154,51 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
     if (!jmv) return
     clearHighlights()
     const newSel: SelectedSet = {}
-    for (const [, info] of layerMapRef.current) {
+    const nextValues: ValueMap = {}
+
+    const toDateTimeLocal = (value: any): string => {
+      if (value == null || value === '') return ''
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return ''
+      const pad = (num: number) => num.toString().padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
+    const formatFieldValue = (field: any, value: any): any => {
+      if (value == null) return ''
+      if (field?.type === 'date') return toDateTimeLocal(value)
+      return String(value)
+    }
+
+    const hasSameValue = (features: any[], fieldName: string) => {
+      if (!features.length) return false
+      const first = features[0]?.attributes?.[fieldName] ?? null
+      return features.every(feature => (feature?.attributes?.[fieldName] ?? null) === first)
+    }
+
+    for (const [dsId, info] of layerMapRef.current) {
       const layer = info.layer
       try {
         const q = layer.createQuery()
         q.geometry            = geometry
         q.spatialRelationship = 'intersects'
         q.returnGeometry      = false
-        q.outFields           = [layer.objectIdField]
+        const fieldNames = fieldConfigsRef.current
+          .filter(fc => fc.useDataSource?.dataSourceId === dsId)
+          .map(fc => fc.fieldName)
+          .filter(Boolean)
+        q.outFields           = Array.from(new Set([layer.objectIdField, ...fieldNames]))
         const res  = await layer.queryFeatures(q)
         const oids = res.features.map((f: any) => f.attributes[layer.objectIdField])
         if (oids.length) {
           newSel[layer.id] = oids
+          fieldConfigsRef.current
+            .filter(fc => fc.useDataSource?.dataSourceId === dsId)
+            .forEach((fc) => {
+              const field = info.fields.find((candidate: any) => candidate.name === fc.fieldName)
+              if (!field || !hasSameValue(res.features, fc.fieldName)) return
+              nextValues[fc.id] = formatFieldValue(field, res.features[0]?.attributes?.[fc.fieldName])
+            })
           try {
             const lv = await (jmv.view as any).whenLayerView(layer)
             highlights.current.push(lv.highlight(oids))
@@ -173,6 +207,8 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
       } catch (e) { console.error('Selection error', layer.title, e) }
     }
     setSelected(newSel)
+    setValues(nextValues)
+    setEditedFieldIds(new Set())
   }, [clearHighlights])
 
   // â”€â”€ Init SketchViewModel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -259,7 +295,13 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
     setDrawing(false)
     try { (jmvRef.current?.view as any).popup.autoOpenEnabled = true } catch {}
   }
-  const clearSelection = () => { clearHighlights(); setSelected({}); setMessage(null) }
+  const clearSelection = () => {
+    clearHighlights()
+    setSelected({})
+    setValues({})
+    setEditedFieldIds(new Set())
+    setMessage(null)
+  }
 
   // â”€â”€ Derived â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const totalSelected = useMemo(
@@ -280,7 +322,14 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
     const info  = layerMap.get(fc.useDataSource?.dataSourceId)
     const field = info?.fields.find((f: any) => f.name === fc.fieldName)
     const val   = values[fc.id] ?? ''
-    const set   = (v: any) => setValues(p => ({ ...p, [fc.id]: v }))
+    const set   = (v: any) => {
+      setValues(p => ({ ...p, [fc.id]: v }))
+      setEditedFieldIds(prev => {
+        const next = new Set(prev)
+        next.add(fc.id)
+        return next
+      })
+    }
 
     if (!field) return <TextInput size="sm" value={val} placeholder="field not available" disabled onChange={e => set(e.target.value)} />
 
@@ -328,7 +377,10 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
   // â”€â”€ Apply edits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const applyAll = async () => {
     if (!totalSelected) { setMessage({ type: 'error', text: t('noFeatures') }); return }
-    const active = fieldConfigs.filter(fc => { const v = values[fc.id]; return v !== '' && v != null })
+    const active = fieldConfigs.filter(fc => editedFieldIds.has(fc.id) && (() => {
+      const v = values[fc.id]
+      return v !== '' && v != null
+    })())
     if (!active.length) { setMessage({ type: 'error', text: 'Enter at least one value.' }); return }
     if (!window.confirm(t('confirmApply', { count: totalSelected }))) return
 
@@ -372,6 +424,7 @@ const Widget = (props: AllWidgetProps<IMConfig>) => {
       }
       setMessage({ type: 'success', text: `${t('success')} (${total} feature(s))` })
       setValues({})
+      setEditedFieldIds(new Set())
     } catch (e: any) {
       console.error(e)
       setMessage({ type: 'error', text: `${t('errorMsg')} : ${e.message || e}` })
