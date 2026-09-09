@@ -17,7 +17,7 @@ Fields to edit are configured by the admin in the widget settings panel.
 
 In Experience Builder, go to **Custom widgets -> Add custom widget** and paste this URL:
 
-    https://raw.githubusercontent.com/GDG-Env/bulk_editor_widget/master/bulk-attribute-editor/manifest.json
+    https://gdg-env.github.io/bulk_editor_widget/bulk-attribute-editor/manifest.json
 
 ## Features
 
